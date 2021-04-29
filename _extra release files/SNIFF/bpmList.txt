@@ -1,0 +1,12 @@
+You can fill this file with every BPM change in your chart so you don't have to enter them each time.
+Make sure to also list the initial BPM first.
+95
+127
+95
+127
+100
+105
+216
+95
+132
+120
