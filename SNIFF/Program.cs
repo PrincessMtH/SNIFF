@@ -31,7 +31,7 @@ namespace SNIFF
 {
 	static class Globals
 	{
-		public const int VersionNumber = 6;
+		public const int VersionNumber = 7;
 		public const int NoteSize = 24;
 		public static ushort ppqn = 96;
 		public static string name = "";
@@ -412,8 +412,10 @@ namespace SNIFF
 						string newbpm = Console.ReadLine();
 						if (newbpm != "")
 						{
-							Globals.bpm = float.Parse(newbpm);
-							song["bpm"] = Globals.bpm;
+							float daBPM = float.Parse(newbpm);
+							Globals.bpm = daBPM;
+							song["bpm"] = daBPM;
+							Globals.bpmList.Add(daBPM);
 						}
 						Console.WriteLine("Selected BPM: " + Globals.bpm + "\nGreat! Keep an eye out, we'll be asking you for the new BPMs.");
 						enableChangeBPM = 1;
@@ -482,8 +484,9 @@ namespace SNIFF
 						else if (enableChangeBPM == 1)
 						{
 							Console.Write("New BPM: ");
-							Globals.bpm = float.Parse(Console.ReadLine());
-							Globals.bpmList.Add(Globals.bpm);
+							float daBPM = float.Parse(Console.ReadLine());
+							Globals.bpm = daBPM;
+							Globals.bpmList.Add(daBPM);
 						}
 							
 						if (enableChangeBPM < 3 && enableChangeBPM > 0) {
