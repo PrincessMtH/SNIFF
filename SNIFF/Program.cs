@@ -366,6 +366,9 @@ namespace SNIFF
 					case (uint)MIDINotes.R:
 						n = new JObject(new JProperty("type", (uint)DoodleNotes.F_R), new JProperty("time", time));
 						break;
+					case (uint)MIDINotes.END:
+						n = new JObject(new JProperty("type", (uint)DoodleNotes.END), new JProperty("time", time));
+						break;
 					default:
 						break;
 				}
