@@ -54,9 +54,9 @@ namespace SNIFF
 
 	public enum HedgeNotes : int
 	{
-		F_L = 0,
+		F_U = 0,
 		F_D = 1,
-		F_U = 2,
+		F_L = 2,
 		F_R = 3,
 
 		BPM_CH = 4
@@ -90,10 +90,16 @@ namespace SNIFF
 			switch (noteData)
 			{
 				case (int)HedgeNotes.F_L:
+					midiPitch = (uint)MIDINotes.L;
+					break;
 				case (int)HedgeNotes.F_D:
+					midiPitch = (uint)MIDINotes.D;
+					break;
 				case (int)HedgeNotes.F_U:
+					midiPitch = (uint)MIDINotes.U;
+					break;
 				case (int)HedgeNotes.F_R:
-					midiPitch = (uint)(MIDINotes.L + noteData);
+					midiPitch = (uint)MIDINotes.R;
 					break;
 				case (int)HedgeNotes.BPM_CH:
 					midiPitch = (uint)MIDINotes.BPM_CH;
