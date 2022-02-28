@@ -31,68 +31,39 @@ namespace SNIFF
 {
 	static class Globals
 	{
-		public const int VersionNumber = 7;
+		public const int VersionNumber = 2020;
 		public const int NoteSize = 24;
 		public static ushort ppqn = 96;
-		public static string name = "";
 		public static float bpm = 0;
 		public static List<float> bpmList = new List<float>();
-		public static int needsVoices = 0; //0 = undecided, -1 = false, 1 = true
-		public static string player1 = "";
-		public static string player2 = "";
+		public static string[] GenshinNotes = { "Left", "Down", "Up", "Right" };
+		public const byte Funny = 0x08;
 	}
 
 	public enum MIDINotes
 	{
-		BF_L = 48,
-		BF_D = 49,
-		BF_U = 50,
-		BF_R = 51,
-		
-		BF_CAM = 53,
-		EN_CAM = 54,
-		
 		BPM_CH = 56,
-		ALT_AN = 57,
-		
-		EN_L = 60,
-		EN_D = 61,
-		EN_U = 62,
-		EN_R = 63
+
+		// this still kinda weird, probably swap them to make more sense!!
+		L_L = 60,
+		L_D = 61,
+		L_U = 62,
+		L_R = 63,
+		R_L = 48,
+		R_D = 49,
+		R_U = 50,
+		R_R = 51
 	}
-
-	public enum FNFNotes : int
-	{
-		F_L = 0,
-		F_D = 1,
-		F_U = 2,
-		F_R = 3,
-
-		O_L = 4,
-		O_D = 5,
-		O_U = 6,
-		O_R = 7,
-
-		BF_CAM = 8,
-		EN_CAM = 9,
-		ALT_AN = 10,
-		BPM_CH = 11
-	}
-	
 
 	class Program
 	{
 		static void ResetGlobals()
 		{
 			Globals.ppqn = 96;
-			Globals.name = "";
 			Globals.bpm = 0;
-			Globals.needsVoices = 0;
-			Globals.player1 = "";
-			Globals.player2 = "";
 		}
 
-		public static FLNote MakeNote(float strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
+		public static FLNote MakeNote(float strumTime, string noteData, float sustainLength, float bpm)
 		{
 			byte velo = 0x64;
 			uint noteTime = (uint)Math.Round(strumTime / MIDITimeToMillis(bpm));
@@ -105,38 +76,14 @@ namespace SNIFF
 				if (duration < (uint)Globals.ppqn / 2)
 					velo = 0x3F;
 			}
-			if (noteData >= (int)FNFNotes.BF_CAM)
-				duration = (uint)(Globals.ppqn * 4);
+
+			if (noteData == null)
+				noteData = "Left_Up";
 			
-			switch (noteData)
-			{
-				case (int)FNFNotes.F_L:
-				case (int)FNFNotes.F_D:
-				case (int)FNFNotes.F_U:
-				case (int)FNFNotes.F_R:
-					midiPitch = (uint)(MIDINotes.BF_L + noteData + (mustHitSection ? 0 : 12));
-					break;
-				case (int)FNFNotes.O_L:
-				case (int)FNFNotes.O_D:
-				case (int)FNFNotes.O_U:
-				case (int)FNFNotes.O_R:
-					midiPitch = (uint)(MIDINotes.BF_L + noteData - 4 + (mustHitSection ? 12 : 0));
-					break;
-				case (int)FNFNotes.BF_CAM:
-					midiPitch = (uint)MIDINotes.BF_CAM;
-					break;
-				case (int)FNFNotes.EN_CAM:
-					midiPitch = (uint)MIDINotes.EN_CAM;
-					break;
-				case (int)FNFNotes.ALT_AN:
-					midiPitch = (uint)MIDINotes.ALT_AN;
-					break;
-				case (int)FNFNotes.BPM_CH:
-					midiPitch = (uint)MIDINotes.BPM_CH;
-					break;
-				default:
-					break;
-			}
+			if (noteData.StartsWith("Left"))
+				midiPitch = (uint)(MIDINotes.L_L + Array.IndexOf(Globals.GenshinNotes, noteData.Split('_')[1]));
+			else if (noteData.StartsWith("Right"))
+				midiPitch = (uint)(MIDINotes.R_L + Array.IndexOf(Globals.GenshinNotes, noteData.Split('_')[1]));
 
 			return new FLNote
 			{
@@ -153,6 +100,19 @@ namespace SNIFF
 				ModX = 0x80,
 				ModY = 0x80
 			};
+		}
+
+		public static FLNote MakeMeloNote(float strumTime, uint midiPitch, float sustainLength, float bpm)
+		{
+			uint duration = (uint)Globals.ppqn / 4;
+			if (sustainLength > 0) { 
+				duration = (uint)(sustainLength / MIDITimeToMillis(bpm));
+				//if (duration < (uint)Globals.ppqn / 2)
+					//velo = 0x3F;
+			}
+			FLNote n = DefaultNote((uint)Math.Round(strumTime / MIDITimeToMillis(bpm)), duration, midiPitch);
+			n.Flags = Globals.Funny;
+			return n;
 		}
 
 		static FLNote DefaultNote(uint time, uint duration, uint pitch)
@@ -177,15 +137,6 @@ namespace SNIFF
 		static FLNote DefaultNote()
 		{
 			return DefaultNote(0, (uint)Globals.ppqn / 4, 60);
-		}
-
-		static JObject DefaultSection()
-		{
-			return new JObject{
-				{ "lengthInSteps", 16 }, //sigh
-				{ "mustHitSection", true },
-				{ "sectionNotes", JArray.FromObject(new object[][] { }) }
-			}; 
 		}
 
 		static byte[] FLNotesToBytes(List<FLNote> notes)
@@ -221,48 +172,26 @@ namespace SNIFF
 			}; //then append size of notes and then notes themselves
 			List<FLNote> notes = new List<FLNote>();
 
-			Console.WriteLine("\nYour BPM is "+o["song"]["bpm"]);
-			Console.WriteLine("\nYour speed is " + o["song"]["speed"]);
-			float bpm = (float)o["song"]["bpm"];
-			bool mustHitSection = true;
-			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)0
-			};
-			for (int i = 0; i < o["song"]["notes"].Count();i++)
+			float bpm = 120;
+			Console.Write("\nPlease enter the BPM.\n" +
+				"Default = 120\n" +
+				"BPM: ");
+			string newbpm = Console.ReadLine();
+			if (newbpm != "")
 			{
-				// yes the section loop actually.
-				// different kind of sex
-				JObject section = (JObject)o["song"]["notes"][i];
-				if(section["changeBPM"] != null && (bool)section["changeBPM"] && (float)section["bpm"] != bpm)
-				{
-					lastBPMChangeTime = new {
-						u = (uint)(i * Globals.ppqn * 4),
-						f = lastBPMChangeTime.f + ((i - lastBPMChangeTime.s) * 4.0f * (1000.0f * 60.0f / bpm)),
-						s = i
-					};
-					bpm = (float)section["bpm"];
-					notes.Add(DefaultNote(lastBPMChangeTime.u, (uint)(Globals.ppqn * 4), (uint)MIDINotes.BPM_CH));
-					Console.WriteLine("BPM change found at bar " + (i + 1) + ", new BPM is " + bpm+". Keep note of this!");
-				}
-				if ((bool)section["mustHitSection"] != mustHitSection)
-				{
-					mustHitSection = !mustHitSection;
-					notes.Add(DefaultNote((uint)(i * Globals.ppqn * 4), (uint)(Globals.ppqn * 4), (uint)(mustHitSection ? MIDINotes.BF_CAM : MIDINotes.EN_CAM)));
-				}
-				if (section["altAnim"] != null && (bool)section["altAnim"])
-					notes.Add(DefaultNote((uint)(i * Globals.ppqn * 4), (uint)(Globals.ppqn * 4), (uint)MIDINotes.ALT_AN));
-				//int j = 0;
-				foreach (JArray fnfNote in section["sectionNotes"])
-				{
-					FLNote swagNote = MakeNote((float)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm);
-					swagNote.Time += lastBPMChangeTime.u;
-					if (fnfNote.Last().Type == JTokenType.Boolean && fnfNote.Last().Value<bool>() == true)
-						swagNote.Flags = 0x10; //set porta for alt anim Note
-					Console.WriteLine(fnfNote.Last().Type);
-					notes.Add(swagNote);
-					//j++;
-				}
+				bpm = float.Parse(newbpm);
+				Globals.bpm = bpm;
 			}
+
+			JArray a = (JArray)o["button_sequence"];
+
+			foreach (JObject genshinNote in a)
+			{
+				// the note loop lol!
+				notes.Add(MakeNote((float)genshinNote["time"], (string)genshinNote["button"], 0, bpm));
+				notes.Add(MakeMeloNote((float)genshinNote["time"], (uint)genshinNote["note"], 0, bpm));
+			}
+
 			byte[] nBytes = FLNotesToBytes(notes);
 			// the array length lets goo
 			List<byte> arrlen = new List<byte>();
@@ -340,43 +269,19 @@ namespace SNIFF
 			if (notes == null)
 				return null;
 			// after da data loop
-			// let us start assembling the funk
+			// let us start assembling the GenshinImpact
 			//Console.WriteLine("\nFirst, we gotta set up some data...");
-			if (Globals.name == "") {
-				Console.Write("Song name: ");
-				Globals.name = Console.ReadLine();
-			}
-			JObject song = new JObject {
-				{ "song", Globals.name }
-			};
+			JObject song = new JObject();
 			if (Globals.bpm == 0) {
 				Console.Write("BPM: ");
 				Globals.bpm = float.Parse(Console.ReadLine());
 			}
 			else if (Globals.bpmList.Count > 0)
 				Globals.bpm = Globals.bpmList[0];
-			song.Add("bpm", Globals.bpm);
-			if (Globals.needsVoices == 0) {
-				Console.Write("Use separate voices file? (y/N, default y) ");
-				Globals.needsVoices = Console.ReadLine().ToLower().Trim() == "n" ? -1 : 1;
-			}
-			song.Add("needsVoices", Globals.needsVoices > 0);
-			if (Globals.player1 == "") {
-				Console.Write("player1 (see assets\\data\\characterList.txt): ");
-				Globals.player1 = Console.ReadLine();
-			}
-			song.Add("player1", Globals.player1);
-			if (Globals.player2 == "") {
-				Console.Write("player2 (see assets\\data\\characterList.txt): ");
-				Globals.player2 = Console.ReadLine();
-			}
-			song.Add("player2", Globals.player2);
-			Console.Write("speed: ");
-			song.Add("speed", float.Parse(Console.ReadLine()));
 			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
 			for (int i = 0; i < notes.Count; i++)
 			{
-				if (notes[i].Pitch == (uint)MIDINotes.BPM_CH)
+				if (notes[i].Pitch == (uint)MIDINotes.BPM_CH && notes[i].ChannelNo == 0x0000)
 				{
 					Console.Write("\nLooks like you have one or more BPM changes. ");
 					if (File.Exists("bpmList.txt") && Globals.bpmList.Count == 0)
@@ -425,29 +330,45 @@ namespace SNIFF
 			}
 			Console.WriteLine("");
 
-			List<JObject> sections = new List<JObject>();
-			bool mustHitSection = true;
 			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)-1
+				u = (uint)0, f = (float)0
 			};
 			int bpmListIdx = 1;
+
+			JArray btnSeq = new JArray();
+			List<FLNote> pitchbuff = new List<FLNote>();
+
 			while (notes.Count > 0)
 			{
+				// hardcode for epic channel split
+				if (notes[0].Flags == Globals.Funny)
+				{
+					pitchbuff.Add(notes[0]);
+					notes.RemoveAt(0);
+					continue;
+				}
+				uint midiNote = 0;
+				if (pitchbuff.Count > 0)
+				{
+					midiNote = pitchbuff[0].Pitch;
+					pitchbuff.RemoveAt(0);
+				}
+				else
+				{
+					// this will probably mess up on double notes, dont care!
+					for (int i = 0; i < notes.Count; i++)
+					{
+						if (notes[i].Flags == Globals.Funny)
+						{
+							midiNote = notes[i].Pitch;
+							notes.RemoveAt(i);
+						}
+					}
+				}
 				// THE NOTE LOOP
 				// this is where you have sex
 				//Console.WriteLine("note FLS TIME " + notes[0].Time);
-				while (sections.Count * Globals.ppqn * 4 <= notes[0].Time)
-				{
-					sections.Add(DefaultSection());
-					//Console.WriteLine("section added");
-					/*if (enableChangeBPM == 2 && lastBPMChangeTime.u > 0)
-					{
-						sections.Last().Add("bpm", bpm);
-						sections.Last().Add("changeBPM", true);
-					}*/
-					sections.Last()["mustHitSection"] = mustHitSection;
-				}
-				List<object> n = null;
+				JObject n = null;
 				float time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (notes[0].Time - lastBPMChangeTime.u);
 				//Console.WriteLine("note FNF TIME " + time);
 				float sus = 0;
@@ -457,28 +378,8 @@ namespace SNIFF
 					sus = MIDITimeToMillis(Globals.bpm) * notes[0].Duration;
 				switch (notes[0].Pitch)
 				{
-					case (uint)MIDINotes.BF_CAM:
-						mustHitSection = true;
-						if ((sections.Last()["mustHitSection"].ToObject<bool>() != mustHitSection) &&
-												(((JArray)sections.Last()["sectionNotes"]).Count > 0))
-							FlipNoteActor(sections.Last());
-						sections.Last()["mustHitSection"] = mustHitSection;
-						break;
-					case (uint)MIDINotes.EN_CAM:
-						mustHitSection = false;
-						if (sections.Last()["mustHitSection"].ToObject<bool>() != mustHitSection &&
-												((JArray)sections.Last()["sectionNotes"]).Count > 0)
-							FlipNoteActor(sections.Last());
-						sections.Last()["mustHitSection"] = mustHitSection;
-						break;
 					case (uint)MIDINotes.BPM_CH:
-						if(sections.Count == lastBPMChangeTime.s)
-						{
-							Console.Write("BPM change event found on bar " + sections.Count + ", but this section\n" +
-											"already had a BPM change, so it was ignored.");
-							break;
-						}
-						Console.WriteLine("BPM change event found on bar " + sections.Count + "!");
+						Console.WriteLine("BPM change event found on bar " + notes[0].Time / Globals.ppqn / 4 + "!");
 						if (enableChangeBPM == 2 && bpmListIdx < Globals.bpmList.Count)
 							Globals.bpm = Globals.bpmList[bpmListIdx++];
 						else if (enableChangeBPM == 1)
@@ -488,84 +389,70 @@ namespace SNIFF
 							Globals.bpm = daBPM;
 							Globals.bpmList.Add(daBPM);
 						}
-							
-						if (enableChangeBPM < 3 && enableChangeBPM > 0) {
-							if (sections.Last().ContainsKey("changeBPM"))
-								sections.Last()["bpm"] = Globals.bpm;
-							else
-							{
-								sections.Last().Add("bpm", Globals.bpm);
-								sections.Last().Add("changeBPM", true);
-							}
-						}
+
 						lastBPMChangeTime = new {
-							u = notes[0].Time, f = time, s = sections.Count
+							u = notes[0].Time, f = time
 						};
 						break;
-					case (uint)MIDINotes.ALT_AN:
-						sections.Last().Add("altAnim", true);
+					case (uint)MIDINotes.R_L:
+						n = new JObject(new JProperty("button", "Right_Left"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.BF_L:
-						n = new List<object>(){ time,
-							mustHitSection ? 0 : 4,
-							sus};
+					case (uint)MIDINotes.R_D:
+						n = new JObject(new JProperty("button", "Right_Down"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.BF_D:
-						n = new List<object>(){ time,
-							mustHitSection ? 1 : 5,
-							sus};
+					case (uint)MIDINotes.R_U:
+						n = new JObject(new JProperty("button", "Right_Up"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.BF_U:
-						n = new List<object>(){ time,
-							mustHitSection ? 2 : 6,
-							sus};
+					case (uint)MIDINotes.R_R:
+						n = new JObject(new JProperty("button", "Right_Right"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.BF_R:
-						n = new List<object>(){ time,
-							mustHitSection ? 3 : 7,
-							sus};
+					case (uint)MIDINotes.L_L:
+						n = new JObject(new JProperty("button", "Left_Left"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.EN_L:
-						n = new List<object>(){ time,
-							mustHitSection ? 4 : 0,
-							sus};
+					case (uint)MIDINotes.L_D:
+						n = new JObject(new JProperty("button", "Left_Down"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.EN_D:
-						n = new List<object>(){ time,
-							mustHitSection ? 5 : 1,
-							sus};
+					case (uint)MIDINotes.L_U:
+						// lol
+						n = new JObject(new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
-					case (uint)MIDINotes.EN_U:
-						n = new List<object>(){ time,
-							mustHitSection ? 6 : 2,
-							sus};
-						break;
-					case (uint)MIDINotes.EN_R:
-						n = new List<object>(){ time,
-							mustHitSection ? 7 : 3,
-							sus};
+					case (uint)MIDINotes.L_R:
+						n = new JObject(new JProperty("button", "Left_Right"),
+							new JProperty("time", time),
+							new JProperty("note", midiNote)
+						);
 						break;
 					default:
 						break;
 				}
 				if (n != null)
-				{
-					List<object[]> sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
-					// alt anim note
-					if ((notes[0].Flags & 0x10) == 0x10)
-						n.Add(true);
-					sectionList.Add(n.ToArray());
-					sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
-				}
+					btnSeq.Add(n);
 				notes.RemoveAt(0);
 			}
 			//note to avoid confusion: the array of sections is called notes in json
-			song.Add("notes", JArray.FromObject(sections));
-			JObject file = new JObject {
-					{ "song", song },
-					{ "generatedBy", "SNIFF ver." + Globals.VersionNumber }
-				};
-			return file;
+			song.Add("button_sequence", btnSeq);
+			song.Add("generatedBy", "SNIFF ver." + Globals.VersionNumber);
+			return song;
 		}
 
 		static void CollectFLPGlobals(FLFile flFile)
@@ -653,7 +540,7 @@ namespace SNIFF
 		[STAThread]
 		static void Main(string[] args)
 		{
-			Console.WriteLine("SiIva Note Importer For FNF (SNIFF)\nquite pungent my dear... version  "+ Globals.VersionNumber +"\n");
+			Console.WriteLine("SiIva Note Importer For FGenshin Impact (SNIFF)\nquite pungent my dear... version  "+ Globals.VersionNumber +"\n");
 			OpenFileDialog fileBrowser = new OpenFileDialog {
 				InitialDirectory = Directory.GetCurrentDirectory(),
 				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|JSON file (*.json)|*.json|All files (*.*)|*.*",
@@ -745,7 +632,7 @@ namespace SNIFF
 										FileName = Path.GetFileNameWithoutExtension(fileName),
 									};
 									if (diffs && diffnames[i] != "normal")
-										saveBrowser.FileName += "-" + diffnames[i];
+										saveBrowser.FileName += "_" + diffnames[i];
 									saveBrowser.FileName += ".json";
 									if (saveBrowser.ShowDialog() == DialogResult.OK)
 									{
